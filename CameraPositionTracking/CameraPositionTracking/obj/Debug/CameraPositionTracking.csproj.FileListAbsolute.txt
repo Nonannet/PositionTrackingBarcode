@@ -1,0 +1,15 @@
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\bin\Debug\CameraPositionTracking.exe.config
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\MainWindow.baml
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\MainWindow.g.cs
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\App.g.cs
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking_MarkupCompile.cache
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.g.resources
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.Properties.Resources.resources
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.csproj.GenerateResource.Cache
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\bin\Debug\CameraPositionTracking.exe
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\bin\Debug\CameraPositionTracking.pdb
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.exe
+c:\users\nicolas\documents\visual studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.pdb
+C:\Users\Nicolas\Documents\Visual Studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking_Content.g.cs
+C:\Users\Nicolas\Documents\Visual Studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.csprojAssemblyReference.cache
+C:\Users\Nicolas\Documents\Visual Studio 2013\Projects\CameraPositionTracking\CameraPositionTracking\obj\Debug\CameraPositionTracking.csproj.CoreCompileInputs.cache

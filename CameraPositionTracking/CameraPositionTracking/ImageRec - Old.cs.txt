@@ -1,0 +1,738 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace CameraPositionTracking
+{
+    class ImageRec
+    {
+        private struct DigFilter
+        {
+            public int[,] filterMatrix;
+            public int xLen;
+            public int yLen;
+        }
+
+        private int[] PrimarryBuffer;
+        private int[] workingBuffer;
+        private int[] SecondaryBuffer;
+        private int[] tempBuff;
+
+        public int Width;
+        public int Height;
+        public int PixelCount;
+        public bool LoopMode = false;
+
+        private int diagonalLen;
+
+        private static DigFilter ScharrOperatorX;
+        private static DigFilter ScharrOperatorY;
+        private static DigFilter GausFilterX;
+        private static DigFilter GausFilterY;
+
+        public ImageRec(int ImageWidth, int ImageHeight)
+        {
+            PrimarryBuffer = new int[ImageHeight * ImageWidth];
+            workingBuffer = new int[ImageHeight * ImageWidth];
+            SecondaryBuffer = new int[ImageHeight * ImageWidth];
+            IntSetImageData(ImageWidth, ImageHeight);
+        }
+
+        public void SetImageData(byte[] buffer, int scale)
+        {
+            int i = 0;
+            int i2 = 0;
+            int newWidth;
+
+            for (int y = 0; y < Height * scale; y += scale)
+            {
+                for (int x = 0; x < Width * scale; x += scale)
+                {
+                    newWidth = Width * scale;
+
+                    i = (x + y * newWidth) * 4;
+                    //i = i2 * 4;
+
+                    PrimarryBuffer[i2] = buffer[i];
+                    PrimarryBuffer[i2] += buffer[i + 1];
+                    PrimarryBuffer[i2] += buffer[i + 2];
+
+                    i2++;
+                }
+            }
+        }
+
+        /*private int swPixel(int colorInteger)
+        {
+            return (colorInteger & 0xFF) + ((colorInteger >> 8) & 0xFF) + ((colorInteger >> 16) & 0xFF);
+        }*/
+
+
+        private void IntSetImageData(int ImageWidth, int ImageHeight)
+        {
+            Height = ImageHeight;
+            Width = ImageWidth;
+            PixelCount = Height * Width;
+            diagonalLen = Isqrt(Width * Width + Height * Height);
+
+            prepareFilters();
+        }
+
+        private void prepareFilters()
+        {
+            ScharrOperatorX.filterMatrix = new int[,] { { 3, 0, -3 }, { 10, 0, -10 }, { 3, 0, -3 } };
+            ScharrOperatorX.xLen = 3;
+            ScharrOperatorX.yLen = 3;
+
+            ScharrOperatorY.filterMatrix = new int[,] { { 3, 10, 3 }, { 0, 0, 0 }, { -3, -10, -3 } };
+            ScharrOperatorY.xLen = 3;
+            ScharrOperatorY.yLen = 3;
+
+            GausFilterX.filterMatrix = new int[,] { { 25 }, { 61 }, { 83 }, { 61 }, { 25 } };
+            GausFilterX.xLen = 5;
+            GausFilterX.yLen = 1;
+
+            GausFilterY.filterMatrix = new int[,] { { 25, 61, 83, 61, 25 } };
+            GausFilterY.xLen = 1;
+            GausFilterY.yLen = 5;
+
+            //private int[,] filterGausY = { { 15, 32, 51, 59, 51, 32, 15 } };
+            //private int[,] filterGausX = { {15}, {32}, {51}, {59}, {51}, {32}, {15} };
+        }
+
+        public void GausFilter()
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    SecondaryBuffer[GetArrayIndex(x, y)] = GetFilteredPixel(x, y, PrimarryBuffer, GausFilterX) / 256;
+                }
+            }
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    workingBuffer[GetArrayIndex(x, y)] = GetFilteredPixel(x, y, SecondaryBuffer, GausFilterY) / 256;
+                }
+            }
+
+            tempBuff = PrimarryBuffer;
+            PrimarryBuffer = workingBuffer;
+            workingBuffer = tempBuff;
+        }
+
+        public void Singulate(int FrameSizeX, int FrameSizeY, int Threshold)
+        {
+            int bigestValue = 0;
+            int bigestPos = 0;
+            int i;
+
+            for (i = 0; i < PixelCount; i++)
+            {
+                workingBuffer[i] = 0;
+            }
+
+            for (int x = 0; x < Width; x += FrameSizeX)
+            {
+                for (int y = 0; y < Height; y += FrameSizeY)
+                {
+                    bigestValue = 0;
+                    bigestPos = -1;
+
+                    for (int ix = -FrameSizeX; ix < FrameSizeX * 2; ix++)
+                    {
+                        for (int iy = -FrameSizeY; iy < FrameSizeY * 2; iy++)
+                        {
+                            i = GetArrayIndex(x + ix, y + iy);
+                            if (bigestValue < PrimarryBuffer[i])
+                            {
+                                bigestValue = PrimarryBuffer[i];
+                                if (ix >= 0 && ix < FrameSizeX && iy >= 0 && iy < FrameSizeY)
+                                    bigestPos = i;
+                                else
+                                    bigestPos = 0;
+                            }
+                        }
+                    }
+
+                    if (bigestPos >= 0 && bigestValue > Threshold)
+                    {
+                        workingBuffer[bigestPos] = bigestValue;
+                    }
+                }
+            }
+
+            tempBuff = PrimarryBuffer;
+            PrimarryBuffer = workingBuffer;
+            workingBuffer = tempBuff;
+        }
+
+        public void FindContur(int FrameSizeX, int FrameSizeY, int Threshold)
+        {
+            int bigestValue = 0;
+            int bigestPos = 0;
+            int i;
+
+            for (i = 0; i < PixelCount; i++)
+            {
+                workingBuffer[i] = 0;
+            }
+
+            for (int x = 0; x < Width; x += FrameSizeX)
+            {
+                for (int y = 0; y < Height; y += FrameSizeY)
+                {
+                    bigestValue = 0;
+                    bigestPos = -1;
+
+                    for (int ix = -FrameSizeX; ix < FrameSizeX * 2; ix++)
+                    {
+                        for (int iy = -FrameSizeY; iy < FrameSizeY * 2; iy++)
+                        {
+                            i = GetArrayIndex(x + ix, y + iy);
+                            if (bigestValue < PrimarryBuffer[i])
+                            {
+                                bigestValue = PrimarryBuffer[i];
+                                if (ix >= 0 && ix < FrameSizeX && iy >= 0 && iy < FrameSizeY)
+                                    bigestPos = i;
+                                else
+                                    bigestPos = 0;
+                            }
+                        }
+                    }
+
+                    if (bigestPos >= 0 && bigestValue > Threshold)
+                    {
+                        workingBuffer[bigestPos] = bigestValue;
+                    }
+                }
+            }
+
+            tempBuff = PrimarryBuffer;
+            PrimarryBuffer = workingBuffer;
+            workingBuffer = tempBuff;
+        }
+
+        public void ClearImage()
+        {
+            for (int i = 0; i < PixelCount; i++)
+            {
+                PrimarryBuffer[i] = 0;
+            }
+        }
+
+        public void NomelizeImage()
+        {
+            int bigestValue = 0;
+
+            for (int i = 0; i < PixelCount; i++)
+            {
+                if (bigestValue < PrimarryBuffer[i])
+                {
+                    bigestValue = PrimarryBuffer[i];
+                }
+            }
+
+            if (bigestValue > 0)
+            {
+                for (int i = 0; i < PixelCount; i++)
+                {
+                    PrimarryBuffer[i] = PrimarryBuffer[i] * 255 / bigestValue;
+                }
+            }
+        }
+
+        public void AmplifyImage(int Faktor)
+        {
+            for (int i = 0; i < PixelCount; i++)
+            {
+                PrimarryBuffer[i] = PrimarryBuffer[i] * Faktor;
+            }
+        }
+
+        private static int Isqrt(int num)
+        {
+            if (0 == num) { return 0; }  // Avoid zero divide   
+            int n = (num / 2) + 1;       // Initial estimate, never low   
+            int n1 = (n + (num / n)) / 2;
+
+            while (n1 < n)
+            {
+                n = n1;
+                n1 = (n + (num / n)) / 2;
+            }
+            return n;
+        }
+
+        private int GetFilteredPixel(int inpX, int inpY, int[] buffer, DigFilter filter)
+        {
+            int pixelValue = 0;
+
+            for (int x = 0; x < filter.xLen; x++)
+            {
+                for (int y = 0; y < filter.yLen; y++)
+                {
+                    pixelValue += buffer[GetArrayIndex(inpX + x - filter.xLen / 2, inpY + y - filter.yLen / 2)] * filter.filterMatrix[x, y];
+                }
+            }
+
+            return pixelValue;
+        }
+
+        private int GetArrayIndex(int x, int y)
+        {
+            if (LoopMode)
+            {
+                if (x > Width - 1) x -= Width - 1;
+                if (y > Height - 1) y -= Height - 1;
+                if (x < 0) x += Width;
+                if (y < 0) y += Height;
+            }
+            else
+            {
+                if (x > Width - 1) x = Width - 1;
+                if (y > Height - 1) y = Height - 1;
+                if (x < 0) x = 0;
+                if (y < 0) y = 0;
+            }
+            return x + y * Width;
+        }
+
+        public void ConvoluteAtan()
+        {
+            int dx;
+            int dy;
+            int angle;
+            int slope;
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    dx = GetFilteredPixel(x, y, PrimarryBuffer, ScharrOperatorX);
+                    dy = GetFilteredPixel(x, y, PrimarryBuffer, ScharrOperatorY);
+
+                    angle = (int)(Math.Atan2((double)dy, (double)dx) * 0x7FFF / Math.PI);
+                    slope = Isqrt((dx * dx) + (dy * dy));
+
+                    if (angle < 0) angle += 0x7FFF;
+
+                    workingBuffer[GetArrayIndex(x, y)] = slope;
+                    SecondaryBuffer[GetArrayIndex(x, y)] = angle;
+                }
+            }
+
+            tempBuff = PrimarryBuffer;
+            PrimarryBuffer = workingBuffer;
+            workingBuffer = tempBuff;
+        }
+
+        public void Convolute()
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    workingBuffer[GetArrayIndex(x, y)] = GetFilteredPixel(x, y, PrimarryBuffer, ScharrOperatorX);
+                    SecondaryBuffer[GetArrayIndex(x, y)] = GetFilteredPixel(x, y, PrimarryBuffer, ScharrOperatorY);
+                }
+            }
+
+            tempBuff = PrimarryBuffer;
+            PrimarryBuffer = workingBuffer;
+            workingBuffer = tempBuff;
+        }
+
+        public void CombineBuffers()
+        {
+            int dx;
+            int dy;
+
+            for (int i = 0; i < PixelCount; i++)
+            {
+                dx = PrimarryBuffer[i];
+                dy = SecondaryBuffer[i];
+
+                PrimarryBuffer[i] = Isqrt(dx * dx + dy * dy);
+            }
+        }
+
+        public void SuppressNonMaximum()
+        {
+            int mSlope;
+            int dx;
+            int dy;
+
+            for (int x = 0; x < Width; x++)
+            {
+                workingBuffer[GetArrayIndex(x, 0)] = 0;
+                workingBuffer[GetArrayIndex(x, Height-1)] = 0;
+            }
+            for (int y = 0; y < Height; y++)
+            {
+                workingBuffer[GetArrayIndex(0, y)] = 0;
+                workingBuffer[GetArrayIndex(Width - 1, y)] = 0;
+            }
+
+            for (int x = 1; x < Width-1; x++)
+            {
+                for (int y = 1; y < Height-1; y++)
+                {
+                    dx = PrimarryBuffer[GetArrayIndex(x, y)];
+                    dy = SecondaryBuffer[GetArrayIndex(x, y)];
+
+                    if (bComp(dy, dx)) //Wagerechte Kante
+                    {
+                        mSlope = PrimarryBuffer[GetArrayIndex(x, y)];
+
+                        if (bComp(PrimarryBuffer[GetArrayIndex(x + 1, y)], mSlope) || bComp(PrimarryBuffer[GetArrayIndex(x - 1, y)], mSlope))
+                            workingBuffer[GetArrayIndex(x, y)] = 0;
+                        else
+                            workingBuffer[GetArrayIndex(x, y)] = 1;
+                    }
+                    else //Senkrechte Kante
+                    {
+                        mSlope = SecondaryBuffer[GetArrayIndex(x, y)];
+
+                        if (bComp(SecondaryBuffer[GetArrayIndex(x, y + 1)], mSlope) || bComp(SecondaryBuffer[GetArrayIndex(x, y - 1)], mSlope))
+                            workingBuffer[GetArrayIndex(x, y)] = 0;
+                        else
+                            workingBuffer[GetArrayIndex(x, y)] = 1;
+                    }
+                }
+            }
+
+            for (int i = 0; i < PixelCount; i++)
+            {
+                PrimarryBuffer[i] *=  workingBuffer[i];
+                SecondaryBuffer[i] *= workingBuffer[i];
+            }
+        }
+
+        private bool bComp(int Val1, int Val2)
+        {
+            //return (Val1 & 0x7FFFFFFF) > (Val2 & 0x7FFFFFFF);
+
+            int v1 = Val1;
+            int v2 = Val2;
+
+            if (v1 < 0) v1 *= -1;
+            if (v2 < 0) v2 *= -1;
+
+            return v1 > v2;
+        }
+
+        public void FastHoughTransformCircle(ImageRec DestImageData)
+        {
+            int slope2;
+            int dx;
+            int dy;
+
+            int iy = 0;
+            int ix = 0;
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    dx = PrimarryBuffer[GetArrayIndex(x, y)];
+                    dy = SecondaryBuffer[GetArrayIndex(x, y)];
+
+                    slope2 = (dx * dx) + (dy * dy);
+
+                    if (slope2 > (127*127))
+                    {
+
+                        for (ix = 0; ix < Width; ix++)
+                        {
+                            if (dy*dy > dx*dx)
+                            {
+                                iy = (int)((ix - x) * dx / dy + y); //Create orthogonal line
+                                if (iy >= 0 && iy < DestImageData.Height)
+                                    DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(ix, iy)] += 1;
+                            }
+                        }
+
+                        for (iy = 0; iy < Height; iy++)
+                        {
+                            if (dx * dx > dy*dy)
+                            {
+                                ix = (int)((iy - y) * dy / dx + x); //Create orthogonal line
+                                if (ix >= 0 && ix < DestImageData.Width)
+                                    DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(ix, iy)] += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public void HoughTransformCircle(ImageRec DestImageData)
+        {
+            int angle;
+            int pos;
+            int normPos;
+            int normAngle;
+            int slope;
+            int dx;
+            int dy;
+
+            int iy = 0;
+
+            double aslope;
+
+            ConvoluteAtan();
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    angle = SecondaryBuffer[GetArrayIndex(x, y)];
+                    slope = PrimarryBuffer[GetArrayIndex(x, y)];
+
+                    if (slope > 127)
+                    {
+                        aslope = 1/Math.Tan((double)angle * Math.PI / 0x7FFF);
+
+                        for (int ix = 0; ix < Width; ix++)
+                        {
+                            iy = (int)(aslope * (ix - x) + y);
+
+                            if (iy > 0 && iy < DestImageData.Height)
+                                DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(ix, iy)] += 10;
+                        }  
+                    }
+                }
+            }
+        }
+
+        public void HoughTransformLine(ImageRec DestImageData)
+        {
+            int angle;
+            int pos;
+            int normPos;
+            int normAngle;
+            int slope;
+
+            ConvoluteAtan();
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    angle = SecondaryBuffer[GetArrayIndex(x, y)];
+                    slope = PrimarryBuffer[GetArrayIndex(x, y)];
+
+                    if (slope > 4000)
+                    {
+                        pos = (int)(x * Math.Sin((double)angle * Math.PI / 0x7FFF) + y * Math.Cos((double)angle * Math.PI / 0x7FFF));
+
+                        if (pos < 0)
+                        {
+                            pos *= -1;
+                            angle += 0x7FFF;
+                        }
+
+                        normPos = pos * (DestImageData.Height - 1) / diagonalLen;
+                        normAngle = angle * (DestImageData.Width - 1) / 0xFFFF;
+
+                        if (normPos > DestImageData.Height - 1) normPos = DestImageData.Height - 1;
+
+                        //DestImageData.intIntBuffer[DestImageData.GetArrayIndex(normAngle, normPos)] += slope;
+                        DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(normAngle, normPos)] += 10;
+                        /*DestImageData.intIntBuffer[DestImageData.GetArrayIndex(normAngle+1, normPos)] += 8;
+                        DestImageData.intIntBuffer[DestImageData.GetArrayIndex(normAngle, normPos+1)] += 8;
+                        DestImageData.intIntBuffer[DestImageData.GetArrayIndex(normAngle+1, normPos+1)] += 8;*/
+                    }
+                }
+            }
+        }
+
+        public void HoughTransformLine2(ImageRec DestImageData)
+        {
+            int angle;
+            int dangle;
+            int pos;
+            int normPos;
+            int normAngle;
+            int slope;
+
+            ConvoluteAtan();
+
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    for (angle = 0; angle < 0xFFFF; angle += 0xFFFF / (DestImageData.Width - 1))
+                    {
+                        dangle = SecondaryBuffer[GetArrayIndex(x, y)];
+                        slope = PrimarryBuffer[GetArrayIndex(x, y)];
+
+                        if (slope > 32)
+                        {
+                            pos = (int)(x * Math.Sin((double)angle * Math.PI / 0x7FFF) + y * Math.Cos((double)angle * Math.PI / 0x7FFF));
+
+                            if (pos < 0)
+                            {
+                                pos *= -1;
+                                angle += 0x7FFF;
+                            }
+
+                            normPos = pos * (DestImageData.Height - 1) / diagonalLen;
+                            normAngle = angle * (DestImageData.Width - 1) / 0xFFFF;
+
+                            if (normPos > DestImageData.Height - 1) normPos = DestImageData.Height - 1;
+
+                            //DestImageData.intIntBuffer[DestImageData.GetArrayIndex(normAngle, normPos)] += slope;
+                            DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(normAngle, normPos)] += 0x7FFF / (Math.Abs(angle - dangle) + 256);
+                        }
+                    }
+                }
+            }
+        }
+
+        public void FindLines(ImageRec DestImageData)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    if (PrimarryBuffer[GetArrayIndex(x, y)] > 0)
+                    {
+                        WriteLine(DestImageData, y, x);
+                    }
+                }
+            }
+        }
+
+        private void WriteLine(ImageRec DestImageData, int pos, int angle)
+        {
+            int[,] points = new int[4, 2];
+            int[,] lPoints = new int[4, 2];
+            int i2 = 0;
+            const int x = 0;
+            const int y = 1;
+
+            points[0, x] = (int)((pos * DestImageData.diagonalLen / (Height - 1)) / Math.Sin((double)angle / (Width - 1) * 2 * Math.PI));
+            points[0, y] = 0;
+
+            points[1, x] = 0;
+            points[1, y] = (int)((pos * DestImageData.diagonalLen / (Height - 1)) / Math.Cos((double)angle / (Width - 1) * 2 * Math.PI));
+
+            points[2, x] = points[0, 0] - (int)(DestImageData.Height / Math.Tan((double)angle / (Width - 1) * 2 * Math.PI));
+            points[2, y] = DestImageData.Height - 1;
+
+            points[3, x] = DestImageData.Width - 1;
+            points[3, y] = points[1, 1] - (int)(DestImageData.Width * Math.Tan((double)angle / (Width - 1) * 2 * Math.PI));
+
+
+            for (int i = 0; i < 4; i++)
+            {
+                if (points[i, x] >= 0 && points[i, x] < DestImageData.Width &&
+                    points[i, y] >= 0 && points[i, y] < DestImageData.Height)
+                {
+                    lPoints[i2, x] = points[i, x];
+                    lPoints[i2, y] = points[i, y];
+                    i2++;
+                }
+            }
+
+            drawLine(DestImageData, lPoints[0, x], lPoints[0, y], lPoints[1, x], lPoints[1, y]);
+
+        }
+
+        private void drawLine(ImageRec DestImageData, int x0, int y0, int x1, int y1)
+        {
+            int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy, e2; // error value e_xy
+
+            while (true)
+            {
+                DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(x0, y0)] = unchecked((int)0xFFFF0000);
+                if (x0 == x1 && y0 == y1) break;
+                e2 = 2 * err;
+                if (e2 > dy) { err += dy; x0 += sx; } // e_xy+e_x > 0
+                if (e2 < dx) { err += dx; y0 += sy; } // e_xy+e_y < 0
+            }
+        }
+
+        public void lineProfile(ImageRec DestImageData, int x0, int y0, int x1, int y1)
+        {
+            int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy, e2; // error value e_xy
+            double lineLen;
+
+            while (true)
+            {
+                //lineLen = Math.Sqrt(Math.Pow(x1 - x0, 2) + Math.Pow(y1 - y0, 2)) * ;
+
+                DestImageData.PrimarryBuffer[DestImageData.GetArrayIndex(x0, y0)] = unchecked((int)0xFFFF0000);
+
+
+                if (x0 == x1 && y0 == y1) break;
+                e2 = 2 * err;
+                if (e2 > dy) { err += dy; x0 += sx; } // e_xy+e_x > 0
+                if (e2 < dx) { err += dx; y0 += sy; } // e_xy+e_y < 0
+            }
+        }
+
+        private void PrepareImageArray()
+        {
+            for (int i = 0; i < PixelCount; i++)
+            {
+                workingBuffer[i] = PrimarryBuffer[i] / 3;
+
+                if (workingBuffer[i] > 255)
+                    workingBuffer[i] = 255 << 8;
+                else if (workingBuffer[i] > 0)
+                    workingBuffer[i] = ((workingBuffer[i] & 0xFF) << 8);
+                else if (workingBuffer[i] > -256)
+                    workingBuffer[i] = ((-workingBuffer[i] & 0xFF) << 16);
+                else
+                    workingBuffer[i] = (255 << 16);
+
+                workingBuffer[i] = unchecked((int)(0xff000000 | (uint)workingBuffer[i]));
+            }
+        }
+
+        public void GetWrittenImage(ref int[] destArray)
+        {
+            PrepareImageArray();
+
+            if (destArray == null)
+            {
+                destArray = new int[PixelCount];
+                workingBuffer.CopyTo(destArray, 0);
+            }
+            else
+            {
+                tempBuff = destArray;
+                destArray = workingBuffer;
+                workingBuffer = tempBuff;
+            }
+        }
+
+        public byte[] Get32BitArray()
+        {
+            //PrepareImageArray();
+
+            byte[] destArray = new byte[PixelCount * 4];
+
+            for (int i = 0; i < PixelCount; i++)
+            {
+                destArray[i * 4 + 0] = (byte)PrimarryBuffer[i];
+                destArray[i * 4 + 1] = (byte)PrimarryBuffer[i];
+                destArray[i * 4 + 2] = (byte)PrimarryBuffer[i];
+                destArray[i * 4 + 3] = 0xFF;
+            }
+
+            return destArray;
+        }
+    }
+}

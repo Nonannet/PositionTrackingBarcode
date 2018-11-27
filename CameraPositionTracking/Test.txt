@@ -1,0 +1,15 @@
+15,6254      GausFilter
+156,2508      HoughTransformCircle
+156,2508      NomelizeImage
+156,2508      Fertig
+
+156,3276
+109,383
+109,3737
+125,0001
+109,3801
+
+31,2463      GausFilter
+203,1235      HoughTransformCircle
+203,1235      NomelizeImage
+203,1235      Fertig

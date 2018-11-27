@@ -1,0 +1,11 @@
+﻿<Window x:Class="CameraPositionTracking.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MainWindow" Height="1469.05" Width="1289.985">
+    <Grid>
+        <Image x:Name="TestImage" HorizontalAlignment="Left" Height="182" Margin="39,10,0,0" VerticalAlignment="Top" Width="160"/>
+        <Image x:Name="OutPutImage" HorizontalAlignment="Left" Height="182" Margin="39,234,0,0" VerticalAlignment="Top" Width="160"/>
+        <Image x:Name="StattImage" HorizontalAlignment="Left" Height="272" Margin="355,10,0,0" VerticalAlignment="Top" Width="255" Stretch="Fill"/>
+
+    </Grid>
+</Window>
